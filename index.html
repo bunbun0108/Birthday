@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Birthday Web App</title>
+    <!-- Elegant Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        /* GLOBAL RESET & MOBILE LOCK */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            touch-action: none; /* Prevents zooming/scrolling */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%; height: 100%;
+            /* Sophisticated Pinkish-Brown/Coffee gradient background */
+            background: linear-gradient(135deg, #F5EAE6, #EBDED7, #E0C8B8, #F2E3DB);
+            background-size: 200% 200%;
+            animation: gradientShift 15s ease infinite;
+            font-family: 'Quicksand', sans-serif;
+            color: #4E342E;
+            overflow: hidden;
+            position: relative;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* BACKGROUND CANVASES */
+        #bg-canvas, #particle-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        #bg-canvas { z-index: 0; }
+        #particle-canvas { z-index: 1; }
+
+        /* SCREEN MANAGEMENT */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10;
+            transition: opacity 0.5s ease;
+        }
+        .hidden { display: none !important; opacity: 0; pointer-events: none; }
+
+        /* TYPOGRAPHY & BUTTONS */
+        h1.title {
+            font-family: 'Caveat', cursive;
+            font-size: 4rem; text-align: center; margin-bottom: 2rem;
+            color: #4A3026; text-shadow: 2px 2px 0px #F2C7C2;
+            line-height: 1.2; z-index: 2;
+        }
+
+        .btn {
+            background-color: #A67B69; /* Soft brown/caramel */
+            color: #FFF;
+            border: 3px solid #4A3026;
+            border-radius: 40px; padding: 15px 35px;
+            font-size: 1.2rem; font-weight: 700;
+            font-family: 'Quicksand', sans-serif;
+            box-shadow: 0 6px 0px #4A3026;
+            cursor: pointer; transition: all 0.1s ease;
+            z-index: 2; display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn:active { transform: translateY(6px); box-shadow: 0 0px 0px #4A3026; }
+
+        /* PARCHMENT MODAL (Step 1) */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(74, 48, 38, 0.4); backdrop-filter: blur(5px);
+            z-index: 50; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+        }
+        #modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .parchment {
+            background-color: #F8EFED;
+            border: 3px solid #8E6857;
+            padding: 2.5rem 2rem; border-radius: 12px; width: 85%; max-width: 400px;
+            box-shadow: inset 0 0 20px rgba(166, 123, 105, 0.1), 0 15px 35px rgba(0,0,0,0.25);
+            text-align: center; font-family: 'Caveat', cursive;
+            font-size: 1.8rem; color: #4A3026; line-height: 1.4;
+        }
+
+        /* 2. CAKE BUILDER & SCALING LAYERS */
+        #cake-container {
+            position: relative; width: 220px; height: 300px;
+            margin-bottom: 2rem; display: flex; justify-content: center;
+        }
+        
+        .layer {
+            position: absolute; 
+            height: 60px; /* Base height */
+            border: 3px solid #4E342E; 
+            border-radius: 50%;
+            animation: bounceLayer 0.6s cubic-bezier(0.25, 1.5, 0.5, 1) forwards;
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.05);
+        }
+        /* Cylinder 3D effect mapping perfectly to decreasing widths */
+        .layer::after {
+            content: ''; position: absolute;
+            top: 28px; left: -3px; right: -3px; height: 35px;
+            background-color: inherit;
+            border-left: 3px solid #4E342E; border-right: 3px solid #4E342E;
+            border-bottom: 3px solid #4E342E; border-radius: 0 0 120px 120px / 0 0 45px 45px;
+            z-index: -1; box-shadow: inset 0 -10px 10px rgba(0,0,0,0.1);
+        }
+
+        @keyframes bounceLayer {
+            0% { transform: translateY(-300px) scale(0.9); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* CANDLE & FLAME - FIXED HEIGHT */
+        #candle {
+            width: 14px; height: 45px;
+            background: repeating-linear-gradient(45deg, #FFF, #FFF 5px, #D6917A 5px, #D6917A 10px);
+            border: 2px solid #4E342E; border-radius: 4px;
+            position: absolute; left: 50%; transform: translateX(-50%);
+            display: none; animation: bounceLayer 0.5s forwards;
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+        }
+        #wick {
+            width: 3px; height: 10px; background: #3E2723; border-radius: 2px;
+            position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+        }
+        #flame {
+            font-size: 3rem; position: absolute;
+            top: -55px; left: 50%; transform: translateX(-50%);
+            display: none; filter: drop-shadow(0 0 15px #FF9800);
+            animation: flicker 0.15s infinite alternate; z-index: 20;
+        }
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1) rotate(-3deg); opacity: 0.8; }
+            100% { transform: translateX(-50%) scale(1.1) rotate(3deg); opacity: 1; }
+        }
+
+        #lighter {
+            font-size: 4rem; position: absolute; display: none; z-index: 60;
+            filter: drop-shadow(3px 5px 6px rgba(0,0,0,0.3)); cursor: grab;
+        }
+
+        /* PRESSURE BAR (Step 4) */
+        #pressure-ui {
+            position: absolute; top: 12%; width: 85%; max-width: 320px;
+            background: #FFF; border: 3px solid #8E6857; border-radius: 20px;
+            padding: 15px; text-align: center;
+            display: none; z-index: 40; box-shadow: 0 8px 15px rgba(74, 48, 38, 0.2);
+            animation: popIn 0.3s ease;
+        }
+        #pressure-ui h3 { font-family: 'Quicksand', sans-serif; font-size: 1.2rem; margin-bottom: 10px; color: #4A3026; }
+        #pressure-bar-container {
+            width: 100%; height: 25px; background: #EFE6E2; border-radius: 12.5px;
+            border: 2px solid #BCAAA4; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #pressure-fill {
+            height: 100%; width: 0%; border-radius: 10.5px;
+            background: linear-gradient(90deg, #F2C7C2, #D6917A, #BC6F58);
+            transition: width 0.1s linear;
+        }
+
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* POLAROID ALBUM & END MESSAGE (Step 5) */
+        .polaroid {
+            background: #FFF; padding: 12px 12px 45px 12px;
+            border-radius: 4px; box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+            opacity: 0; pointer-events: none; cursor: pointer;
+            transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.1); z-index: 30;
+        }
+        .polaroid img {
+            max-width: 75vw; max-height: 55vh; width: auto; height: auto;
+            border: 1px solid #EFE6E2; object-fit: cover; display: block; border-radius: 2px;
+            background-color: #FAF4F2;
+        }
+        .polaroid.show {
+            opacity: 1; pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1) rotate(var(--rot));
+        }
+        .polaroid.hide {
+            opacity: 0; pointer-events: none;
+            transform: translate(-50%, 100%) scale(0.5) rotate(calc(var(--rot) - 20deg));
+        }
+
+        #end-message {
+            text-align: center; font-family: 'Caveat', cursive; color: #4A3026;
+            background: rgba(248, 239, 237, 0.95); padding: 35px 20px; border-radius: 20px;
+            border: 3px dashed #A67B69; display: none; z-index: 30;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15); animation: popIn 0.5s forwards;
+            max-width: 85%;
+        }
+        #end-message h2 { font-size: 3rem; margin-bottom: 5px; line-height: 1.1; }
+    </style>
+</head>
+<body>
+
+    <!-- Beautiful Procedural Autumn Brown Cherry Blossom Tree Canvas -->
+    <canvas id="bg-canvas"></canvas>
+    <!-- Dynamic falling petal particles -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Step 1: Landing -->
+    <div id="screen-landing" class="screen">
+        <h1 class="title">Happy Birthday DD!</h1>
+        <button id="btn-read-letter" class="btn">Read Letter</button>
+    </div>
+
+    <!-- Letter Overlay -->
+    <div id="modal-overlay">
+        <div class="parchment">
+            <h2 style="margin-bottom: 10px; font-size: 2.2rem; color: #4A3026;">To DD,</h2>
+            <p style="margin-bottom: 10px;">Happy Birthday DD🎂🥳!</p>
+            <p style="margin-bottom: 15px; font-size: 1.6rem;">Sending you all my love and this beautiful cake from your baini instead...</p>
+            <p style="margin-bottom: 25px; font-size: 1.6rem;">But you have to build it yourself!</p>
+            <button id="btn-start-cake" class="btn">Let's Build The CAKEEE!</button>
+        </div>
+    </div>
+
+    <!-- Step 2: Cake Builder -->
+    <div id="screen-cake" class="screen hidden">
+        <div id="cake-container">
+            <div id="candle">
+                <div id="wick"></div>
+                <div id="flame">🔥</div>
+            </div>
+            <!-- Dynamic Layers Injected Here -->
+        </div>
+        <button id="btn-put-layer" class="btn">Put Layer</button>
+        <button id="btn-get-lighter" class="btn hidden" style="background-color:#A15D4D; border-color:#5E362A;">Get Lighter Gun</button>
+    </div>
+
+    <!-- Draggable Lighter -->
+    <div id="lighter">🔫</div>
+
+    <!-- Step 4: Blow Out Bar -->
+    <div id="pressure-ui">
+        <h3>Tap fast to blow it out!</h3>
+        <div id="pressure-bar-container">
+            <div id="pressure-fill"></div>
+        </div>
+    </div>
+
+    <!-- Step 5: Polaroid Album -->
+    <div id="screen-album" class="screen hidden">
+        <div id="end-message">
+            <h2>YOURE THE BESTT DD🫶🏻💗
+              May God bless you alwayss DD!</h2>
+        </div>
+    </div>
+
+    <script>
+        /* ====================================================
+           ADVANCED CANVAS: Procedural Brown Cherry Blossom Tree
+           ==================================================== */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d', { alpha: true });
+        const partCanvas = document.getElementById('particle-canvas');
+        const partCtx = partCanvas.getContext('2d', { alpha: true });
+
+        let cw, ch;
+        // sophisticated autumn/coffee pinkish cherry blossom palette
+        const blossomColors =['#E6A89C', '#D6917A', '#BC6F58', '#F2C7C2', '#B37667'];
+        let particles =[];
+
+        function initCanvas() {
+            cw = bgCanvas.width = partCanvas.width = window.innerWidth;
+            ch = bgCanvas.height = partCanvas.height = window.innerHeight;
+            
+            drawBeautifulTree();
+            createParticles();
+        }
+
+        function drawBeautifulTree() {
+            bgCtx.clearRect(0, 0, cw, ch);
+            
+            // Add a lovely soft drop shadow for the tree structure to give it depth
+            bgCtx.shadowColor = 'rgba(74, 48, 38, 0.4)';
+            bgCtx.shadowBlur = 10;
+            bgCtx.shadowOffsetX = 4;
+            bgCtx.shadowOffsetY = 4;
+            
+            bgCtx.save();
+            // Position the root of the tree at the bottom rightish corner
+            const rootX = cw * 0.9;
+            const rootY = ch + 20;
+            bgCtx.translate(rootX, rootY);
+            
+            // Scale branch size based on screen size
+            const baseLen = Math.min(cw, ch) * 0.22;
+            
+            // Draw starting leaning slightly left
+            generateBranch(baseLen, -Math.PI / 2 - 0.3, 22, 0);
+            bgCtx.restore();
+
+            // clear shadow for other canvas ops
+            bgCtx.shadowColor = 'transparent';
+        }
+
+        // Recursive tree branch drawing using curves for natural "cool" look
+        function generateBranch(len, angle, width, depth) {
+            bgCtx.save();
+            bgCtx.rotate(angle);
+            
+            // Branch color
+            bgCtx.strokeStyle = '#4A3026';
+            bgCtx.lineWidth = width;
+            bgCtx.lineCap = 'round';
+            bgCtx.beginPath();
+            bgCtx.moveTo(0, 0);
+            
+            // Curve the branch elegantly instead of a straight line
+            bgCtx.quadraticCurveTo(-len * 0.1, -len * 0.5, 0, -len);
+            bgCtx.stroke();
+            
+            // Move coordinate system to the end of the branch
+            bgCtx.translate(0, -len);
+            
+            // End case: render leaves/blossoms
+            if (len < 16 || depth > 8) {
+                drawBlossomCluster();
+                bgCtx.restore();
+                return;
+            }
+            
+            // Recursively generate sub-branches
+            const numBranches = (Math.random() > 0.4) ? 2 : 3;
+            for (let i = 0; i < numBranches; i++) {
+                const angleOffset = (Math.random() * 0.8) - 0.4;
+                const newLen = len * (0.65 + Math.random() * 0.15);
+                const newWidth = width * 0.7;
+                generateBranch(newLen, angleOffset, newWidth, depth + 1);
+            }
+            
+            bgCtx.restore();
+        }
+
+        function drawBlossomCluster() {
+            bgCtx.shadowColor = 'transparent';
+            bgCtx.globalAlpha = 0.85;
+            const color = blossomColors[Math.floor(Math.random() * blossomColors.length)];
+            bgCtx.fillStyle = color;
+            
+            // Draw 2 to 4 overlapping circles as a blossom cluster
+            const count = Math.floor(Math.random() * 3) + 2;
+            for(let i = 0; i < count; i++) {
+                bgCtx.beginPath();
+                const ox = (Math.random() - 0.5) * 15;
+                const oy = (Math.random() - 0.5) * 15;
+                const r = Math.random() * 8 + 5;
+                bgCtx.arc(ox, oy, r, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+        }
+
+        class PetalParticle {
+            constructor() {
+                this.reset(true);
+            }
+            reset(randomY = false) {
+                this.x = Math.random() * cw * 1.5 - cw * 0.25;
+                this.y = randomY ? Math.random() * ch : -20 - Math.random() * 50;
+                this.size = Math.random() * 5 + 3;
+                this.color = blossomColors[Math.floor(Math.random() * blossomColors.length)];
+                this.speedY = Math.random() * 1.5 + 0.5; // fall downwards slowly
+                this.speedX = (Math.random() - 0.5) * 1 - 1.0; // wind blows gently to the left
+                this.angle = Math.random() * 360;
+                this.spin = (Math.random() - 0.5) * 0.1;
+            }
+            update() {
+                // gentle swaying fall
+                this.x += this.speedX + Math.sin(Date.now() / 1500 + this.angle) * 0.8;
+                this.y += this.speedY;
+                this.angle += this.spin;
+
+                if (this.y > ch + 20 || this.x < -50 || this.x > cw + 50) {
+                    this.reset();
+                }
+            }
+            draw() {
+                partCtx.save();
+                partCtx.translate(this.x, this.y);
+                partCtx.rotate(this.angle);
+                partCtx.fillStyle = this.color;
+                partCtx.globalAlpha = 0.8;
+                partCtx.beginPath();
+                // Cute asymmetrical petal shape
+                partCtx.ellipse(0, 0, this.size, this.size * 0.6, 0, 0, Math.PI * 2);
+                partCtx.fill();
+                partCtx.restore();
+            }
+        }
+
+        function createParticles() {
+            particles =[];
+            const count = Math.min(Math.floor(cw / 6), 60); // Optimize count per screen
+            for (let i = 0; i < count; i++) {
+                particles.push(new PetalParticle());
+            }
+        }
+
+        function animateParticles() {
+            partCtx.clearRect(0, 0, cw, ch);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        window.addEventListener('resize', initCanvas);
+        // Start engine
+        initCanvas();
+        animateParticles();
+
+
+        /* ====================================================
+           UI LOGIC & INTERACTIVE FLOW
+           ==================================================== */
+        const screenLanding = document.getElementById('screen-landing');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const screenCake = document.getElementById('screen-cake');
+        const screenAlbum = document.getElementById('screen-album');
+        const cakeContainer = document.getElementById('cake-container');
+        const candle = document.getElementById('candle');
+        const flame = document.getElementById('flame');
+        const lighter = document.getElementById('lighter');
+        const pressureUI = document.getElementById('pressure-ui');
+        const pressureFill = document.getElementById('pressure-fill');
+
+        let layerCount = 0;
+        let isDragging = false;
+        let isLit = false;
+        let blowingActive = false;
+        let pressure = 0;
+        let blowInterval = null;
+
+        /* STEP 1: Landing to Modal */
+        document.getElementById('btn-read-letter').onclick = () => {
+            modalOverlay.classList.add('active');
+        };
+        document.getElementById('btn-start-cake').onclick = () => {
+            modalOverlay.classList.remove('active');
+            screenLanding.classList.add('hidden');
+            screenCake.classList.remove('hidden');
+        };
+
+        /* STEP 2: Cake Builder (Fixing the height & scaling logic) */
+        const cakeColors =['#F5DFD3', '#E6C9B8', '#D6A68D', '#B3816B']; // Coffee/caramel tiers
+        const maxCakeWidth = 220;
+
+        document.getElementById('btn-put-layer').onclick = () => {
+            if (layerCount >= 4) return;
+            
+            const layerWidth = maxCakeWidth - (layerCount * 35); // Shrink sequentially
+            const leftPos = (maxCakeWidth - layerWidth) / 2; // Keep horizontally centered
+            const bottomPos = layerCount * 30; // 30px visual overlap offset per layer
+            
+            const layer = document.createElement('div');
+            layer.className = 'layer';
+            layer.style.width = layerWidth + 'px';
+            layer.style.left = leftPos + 'px';
+            layer.style.bottom = bottomPos + 'px';
+            layer.style.backgroundColor = cakeColors[layerCount];
+            layer.style.zIndex = layerCount + 1;
+            
+            cakeContainer.appendChild(layer);
+            layerCount++;
+
+            if (layerCount === 4) {
+                document.getElementById('btn-put-layer').classList.add('hidden');
+                
+                // CANDLE HEIGHT FIX: Topmost layer base is at 90px (3 * 30).
+                // It renders an artificial cylinder top surface. Set the candle directly onto that pseudo-surface.
+                candle.style.bottom = '105px'; 
+                candle.style.zIndex = layerCount + 2;
+                candle.style.display = 'block';
+
+                setTimeout(() => {
+                    document.getElementById('btn-get-lighter').classList.remove('hidden');
+                }, 800);
+            }
+        };
+
+        /* STEP 3: Lighter Gun Logic */
+        const btnLighter = document.getElementById('btn-get-lighter');
+        btnLighter.onclick = () => {
+            btnLighter.classList.add('hidden');
+            lighter.style.display = 'block';
+            lighter.style.left = (window.innerWidth / 2 - 35) + 'px';
+            lighter.style.top = (window.innerHeight * 0.7) + 'px';
+        };
+
+        // Cross-platform drag tracking
+        const handleDragStart = (e) => { if(!isLit) isDragging = true; };
+        const handleDragEnd = () => { isDragging = false; };
+        const handleDragMove = (e) => {
+            if (!isDragging || isLit) return;
+            e.preventDefault();
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            lighter.style.left = (clientX - 35) + 'px';
+            lighter.style.top = (clientY - 35) + 'px';
+
+            detectIgnition();
+        };
+
+        lighter.addEventListener('mousedown', handleDragStart);
+        lighter.addEventListener('touchstart', handleDragStart, {passive: false});
+        document.addEventListener('mouseup', handleDragEnd);
+        document.addEventListener('touchend', handleDragEnd);
+        document.addEventListener('mousemove', handleDragMove, {passive: false});
+        document.addEventListener('touchmove', handleDragMove, {passive: false});
+
+        function detectIgnition() {
+            const lRect = lighter.getBoundingClientRect();
+            const wRect = document.getElementById('wick').getBoundingClientRect();
+
+            const lX = lRect.left + (lRect.width / 2);
+            const lY = lRect.top + (lRect.height / 2);
+            const wX = wRect.left + (wRect.width / 2);
+            const wY = wRect.top + (wRect.height / 2);
+
+            const distance = Math.hypot(lX - wX, lY - wY);
+            if (distance < 50 && !isLit) {
+                isLit = true;
+                igniteSequence();
+            }
+        }
+
+        function igniteSequence() {
+            flame.style.display = 'block';
+            lighter.style.transition = 'opacity 0.4s';
+            lighter.style.opacity = '0';
+            setTimeout(() => {
+                lighter.style.display = 'none';
+                startBlowOutPhase();
+            }, 500);
+        }
+
+        /* STEP 4: Blow Mechanic */
+        function startBlowOutPhase() {
+            pressureUI.style.display = 'block';
+            blowingActive = true;
+            pressure = 0;
+
+            blowInterval = setInterval(() => {
+                if (pressure > 0) {
+                    pressure = Math.max(0, pressure - 5);
+                    pressureFill.style.width = pressure + '%';
+                }
+            }, 200);
+        }
+
+        const processTap = (e) => {
+            if (!blowingActive) return;
+            if(e.target.closest('button')) return;
+
+            pressure = Math.min(100, pressure + 15);
+            pressureFill.style.width = pressure + '%';
+
+            if (pressure >= 100) finishBlowingPhase();
+        };
+
+        document.addEventListener('touchstart', processTap, { passive: false });
+        document.addEventListener('mousedown', processTap);
+
+        function finishBlowingPhase() {
+            blowingActive = false;
+            clearInterval(blowInterval);
+            pressureUI.style.display = 'none';
+
+            // Smoke Out Effect
+            flame.innerHTML = '💨';
+            flame.style.animation = 'none';
+            flame.style.opacity = '0.6';
+            flame.style.filter = 'none';
+            flame.style.transform = 'translate(-50%, -40px) scale(1.6)';
+            flame.style.transition = 'all 1s ease-out';
+            
+            spawnConfetti();
+
+            setTimeout(() => {
+                screenCake.classList.add('hidden');
+                screenAlbum.classList.remove('hidden');
+                initAlbumPhase();
+            }, 2200);
+        }
+
+        function spawnConfetti() {
+            const colors =['#E6A89C', '#D6917A', '#F2C7C2', '#BC6F58', '#4A3026'];
+            for (let i = 0; i < 60; i++) {
+                setTimeout(() => {
+                    const c = document.createElement('div');
+                    c.style.position = 'fixed';
+                    c.style.width = '10px'; c.style.height = '10px';
+                    c.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    c.style.borderRadius = (Math.random() > 0.5) ? '50%' : '2px'; 
+                    c.style.top = '50%'; c.style.left = '50%';
+                    c.style.zIndex = '100';
+
+                    const angle = Math.random() * Math.PI * 2;
+                    const velocity = 80 + Math.random() * 200;
+                    const tx = Math.cos(angle) * velocity;
+                    const ty = Math.sin(angle) * velocity;
+
+                    c.style.transform = `translate(-50%, -50%) rotate(0deg)`;
+                    c.style.transition = 'transform 1.2s cubic-bezier(0.1, 0.8, 0.3, 1), opacity 1.2s ease-in-out';
+                    document.body.appendChild(c);
+                    c.offsetWidth; // reflow trigger
+
+                    c.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) rotate(${Math.random() * 720}deg)`;
+                    c.style.opacity = '0';
+                    setTimeout(() => c.remove(), 1200);
+                }, i * 15);
+            }
+        }
+
+        /* STEP 5: Polaroid Album Setup using strictly mapped uploaded filenames */
+        const albumPhotos =[
+            '1.jpeg.JPG',
+            '2.jpeg.JPG',
+            '2.jpeg.JPG',
+            '4.jpeg.JPG',
+            '5.jpeg.JPG',
+            '6.jpeg.JPG'
+        ];
+        let photoIndex = 0;
+
+        function initAlbumPhase() {
+            loadNextPolaroid();
+        }
+
+        function loadNextPolaroid() {
+            if (photoIndex >= albumPhotos.length) {
+                document.getElementById('end-message').style.display = 'block';
+                return;
+            }
+
+            const pContainer = document.createElement('div');
+            pContainer.className = 'polaroid';
+            
+            const imgEl = document.createElement('img');
+            imgEl.src = albumPhotos[photoIndex];
+            imgEl.alt = "Birthday Memory";
+            
+            pContainer.appendChild(imgEl);
+            screenAlbum.appendChild(pContainer);
+
+            const randomRotation = (Math.random() * 20 - 10) + 'deg';
+            pContainer.style.setProperty('--rot', randomRotation);
+            
+            setTimeout(() => { pContainer.classList.add('show'); }, 50);
+
+            // Click to dismiss and load next
+            pContainer.onclick = () => {
+                pContainer.classList.remove('show');
+                pContainer.classList.add('hide');
+                
+                setTimeout(() => { pContainer.remove(); }, 500);
+
+                photoIndex++;
+                loadNextPolaroid();
+            };
+        }
+    </script>
+</body>
+</html>
